@@ -1,0 +1,3 @@
+/node_modules
+/tools/javascriptlint/build
+/tools/javascriptlint/spidermonkey/src/build

@@ -63,7 +63,7 @@ function getFirstDatafile(dir, fileprefix, callback) {
         res.on('object', function (obj) {
             if (!result) {
                 if (fileprefix) {
-                    if (obj.name.substr(0,fileprefix.length) === fileprefix) {
+                    if (obj.name.substr(0, fileprefix.length) === fileprefix) {
                         result = obj;
                     }
                 } else {
@@ -72,8 +72,8 @@ function getFirstDatafile(dir, fileprefix, callback) {
             }
         });
 
-        res.once('error', function (err) {
-            console.error('ERROR: ' + err.stack);
+        res.once('error', function (e) {
+            console.error('ERROR: ' + e.stack);
             process.exit(1);
         });
 
@@ -102,12 +102,14 @@ function findVmapiData(datacenter, callback)
 
 function findDockerImageData(datacenter, callback)
 {
-    findLatestDatafile(datacenter, 'manatee_backups', 'docker_image_tags', callback);
+    findLatestDatafile(datacenter, 'manatee_backups', 'docker_image_tags',
+        callback);
 }
 
 function findUserData(datacenter, callback)
 {
-    findLatestDatafile(datacenter, 'manatee_backups', 'ufds_o_smartdc', callback);
+    findLatestDatafile(datacenter, 'manatee_backups', 'ufds_o_smartdc',
+        callback);
 }
 
 // general log processor
@@ -123,7 +125,6 @@ function onEachLogLine(datacenter, service, hours, objcb, callback)
         var when;
         var year, month, day, hour;
         var potential;
-        var count = 0;
 
         when = new Date(new Date().getTime() - (1000 * 3600 * (hours - idx)));
 
@@ -138,45 +139,47 @@ function onEachLogLine(datacenter, service, hours, objcb, callback)
         potential = path.join(path_prefix, year, month, day, hour);
 
         getFirstDatafile(potential, null, function (err, value) {
-           var buffer = '';
-           var filename;
+            var buffer = '';
+            var filename;
 
-           if (!err && value) {
-               filename = path.join(value.parent, value.name);
-               console.error('=> ' + filename);
+            if (!err && value) {
+                filename = path.join(value.parent, value.name);
+                console.error('=> ' + filename);
 
-               readFile(filename, function (line) {
-                   var chunk;
-                   var chunks;
+                readFile(filename, function (line) {
+                    var chunk;
+                    var chunks;
 
-                   buffer += line.toString();
-                   chunks = buffer.split('\n');
-                   while (chunks.length > 1) {
-                       chunk = chunks.shift();
-                       if (chunk && chunk.length > 0) {
-                           try {
-                               objcb(JSON.parse(chunk));
-                           } catch (e) {
-                               // TODO: if this line looks like
-                               //     "Uncaught TypeError: Cannot call method 'substr' of undefined"
-                               // then we should track that separately.
-                               console.error('failed to parse: ' + JSON.stringify(chunk));
-                           }
-                       }
-                   }
-                   buffer = chunks.pop();
-                   return;
-               }, function (err) {
-                   if (buffer.length > 0) {
-                       objcb(JSON.parse(buffer));
-                   }
-                   cb(err);
-                   idx++;
-               });
-           } else {
-               idx++;
-               cb();
-           }
+                    buffer += line.toString();
+                    chunks = buffer.split('\n');
+                    while (chunks.length > 1) {
+                        chunk = chunks.shift();
+                        if (chunk && chunk.length > 0) {
+                            try {
+                                objcb(JSON.parse(chunk));
+                            } catch (e) {
+                                // TODO: if this line looks like
+                                //     "Uncaught TypeError: Cannot call method
+                                //     'substr' of undefined"
+                                // then we should track that separately.
+                                console.error('failed to parse: '
+                                    + JSON.stringify(chunk));
+                            }
+                        }
+                    }
+                    buffer = chunks.pop();
+                    return;
+                }, function (e) {
+                    if (!e && buffer.length > 0) {
+                        objcb(JSON.parse(buffer));
+                    }
+                    cb(e);
+                    idx++;
+                });
+            } else {
+                idx++;
+                cb();
+            }
         });
     }, function (err) {
         callback();
@@ -285,6 +288,8 @@ function readFile(filename, linecb, callback) {
 // CNAPI servers
 
 function processCnapiServer(server, data) {
+    var pct;
+
     if (server.hostname === 'headnode') {
         return;
     }
@@ -299,7 +304,7 @@ function processCnapiServer(server, data) {
     data.servers.push({
         hostname: server.hostname,
         ram: server.ram,
-        prov: sprintf("%5.2f%%", pct),
+        prov: sprintf('%5.2f%%', pct),
         vms: Object.keys(server.vms).length,
         traits: ((server.traits && Object.keys(server.traits).length > 0) ?
             ' ' + JSON.stringify(Object.keys(server.traits)) : '')
@@ -347,7 +352,7 @@ function processImgapiData(filename, data, callback) {
         if (!err) {
             idx = buffer.indexOf('[\n') || 0;
             obj = JSON.parse(buffer.slice(idx));
-            obj.forEach(function(img) {
+            obj.forEach(function (img) {
                 processImgapiImg(img, data);
             });
         }
@@ -361,18 +366,16 @@ function processDockerImg(imgobj, data) {
     if (!data.hasOwnProperty('dockerimages')) {
         data.dockerimages = {};
     }
-    data.dockerimages[dockerIdToUuid(imgobj.docker_id)] = imgobj.repo + ':' + imgobj.tag;
+    data.dockerimages[dockerIdToUuid(imgobj.docker_id)]
+        = imgobj.repo + ':' + imgobj.tag;
 }
 
 function processDockerImgData(filename, data, callback) {
     var buffer = '';
 
     function addData(chunk) {
-        var im = {};
-        var matches;
+        var imgobj;
         var obj;
-        var restart_policy;
-        var smartdc_role;
 
         if (chunk.length === 0) {
             return;
@@ -390,11 +393,11 @@ function processDockerImgData(filename, data, callback) {
         }
     }
 
-    readFile(filename, function (data) {
+    readFile(filename, function (_data) {
         var chunk;
         var chunks;
 
-        buffer += data.toString();
+        buffer += _data.toString();
         chunks = buffer.split('\n');
         while (chunks.length > 1) {
             chunk = chunks.shift();
@@ -553,7 +556,6 @@ function updateVMCounters(vmobj, data) {
 function processVmapiVM(vmobj, data) {
     var im = {};
     var matches;
-    var restart_policy;
     var smartdc_role;
 
     if (vmobj.internal_metadata) {
@@ -561,6 +563,7 @@ function processVmapiVM(vmobj, data) {
     }
 
     if (vmobj.tags && vmobj.owner_uuid === ADMIN_UUID) {
+        // JSSTYLED
         matches = vmobj.tags.match(/-smartdc_role=([a-z]+)-smartdc_type=core-/);
         if (matches) {
             smartdc_role = matches[1];
@@ -637,8 +640,8 @@ function normalizeDockerEndpoint(endpoint)
 {
     var candidate;
     var test;
-    var result = '';
 
+    // JSSTYLED
     candidate = endpoint.replace(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/g, '<UUID>');
     candidate = candidate.replace(/[a-f0-9]{64}/g, '<DockerID>');
 
@@ -646,10 +649,12 @@ function normalizeDockerEndpoint(endpoint)
     if (test) {
         return (test[1] + '<Container>');
     }
+    // JSSTYLED
     test = candidate.match(/^(POST \/v[0-9\.]+\/images\/create\?fromImage=)/);
     if (test) {
         return (test[1] + '<ImageName>');
     }
+    // JSSTYLED
     test = candidate.match(/^(POST \/v[0-9\.]+\/containers\/create\?name=)/);
     if (test) {
         return (test[1] + '<Container>');
@@ -674,6 +679,7 @@ function normalizeDockerEndpoint(endpoint)
     if (test) {
         return (test[1] + '<Container>' + test[2]);
     }
+    // JSSTYLED
     test = candidate.match(/^(POST \/v[0-9\.]+\/containers\/<DockerID>\/resize\?)/);
     if (test) {
         return (test[1] + 'h=H&w=W');
@@ -694,6 +700,7 @@ function normalizeDockerEndpoint(endpoint)
     if (test) {
         return (test[1] + '<Container>' + test[2]);
     }
+    // JSSTYLED
     test = candidate.match(/^(GET \/v[0-9\.]+\/images\/search?term=)/);
     if (test) {
         return (test[1] + '<SearchTerm>');
@@ -728,7 +735,8 @@ function addDockerLogData(obj, data)
         data.methods[obj.req.method]++;
 
         if (obj.req.hasOwnProperty('url')) {
-            endpoint = normalizeDockerEndpoint(obj.req.method + ' ' + obj.req.url);
+            endpoint = normalizeDockerEndpoint(obj.req.method + ' '
+                + obj.req.url);
             if (!data.hasOwnProperty('endpoints')) {
                 data.endpoints = {};
             }
@@ -845,10 +853,6 @@ function outputServerCapacity(data) {
 
 function outputVmCounts(data) {
     var images = [];
-    var life_bucket_idx = {};
-    var lifetime_max = 0;
-    var size_max_all = 0;
-    var size_max_active = 0;
 
     var lifetime_results = [];
     var restart_results = [];
@@ -868,7 +872,7 @@ function outputVmCounts(data) {
         var t = {type: type};
 
         Object.keys(data.vm_types[type]).forEach(function (k) {
-            t[k] = data.vm_types[type][k]
+            t[k] = data.vm_types[type][k];
         });
         type_results.push(t);
     });
@@ -913,15 +917,20 @@ function outputVmCounts(data) {
     });
 
     console.log('\n=== VM STATES (BY CREATION) ===');
-    tabula(state_results, {columns: ['state', 'all', '< 24h', '1-2d', '2-3d', '3-7d', '7-30d', '> 30d'], sort: ['all']});
+    tabula(state_results, {columns: [
+        'state', 'all', '< 24h', '1-2d', '2-3d', '3-7d', '7-30d', '> 30d'
+    ], sort: ['all']});
     console.log('\n=== VM LIFETIMES (ALL TIME) ===');
-    tabula(lifetime_results, {columns: ['lifetime', 'count', 'histogram'], sort: ['idx']});
+    tabula(lifetime_results, {columns: ['lifetime', 'count', 'histogram'],
+        sort: ['idx']});
     console.log('\n=== VM TYPES (ALL TIME) ===');
     tabula(type_results, {sort: ['all']});
     console.log('\n=== VM SIZES (ALL TIME) ===');
-    tabula(size_results_all, {columns: ['size', 'count', 'histogram'], sort: ['size']});
+    tabula(size_results_all, {columns: ['size', 'count', 'histogram'],
+        sort: ['size']});
     console.log('\n=== VM SIZES (ACTIVE) ===');
-    tabula(size_results_active, {columns: ['size', 'count', 'histogram'], sort: ['size']});
+    tabula(size_results_active, {columns: ['size', 'count', 'histogram'],
+        sort: ['size']});
     if (restart_results.length > 0) {
         console.log('\n=== DOCKER RESTART POLICIES ===');
         tabula(restart_results, {sort: ['all']});
@@ -930,7 +939,7 @@ function outputVmCounts(data) {
     images = [];
     Object.keys(data.vm_images_all).sort(function (a, b) {
         return (data.vm_images_all[b] - data.vm_images_all[a]);
-    }).slice(0,20).forEach (function (i) {
+    }).slice(0, 20).forEach(function (i) {
         images.push({
             uuid: i,
             name: getImageName(i, data),
@@ -943,7 +952,7 @@ function outputVmCounts(data) {
     images = [];
     Object.keys(data.vm_images_active).sort(function (a, b) {
         return (data.vm_images_active[b] - data.vm_images_active[a]);
-    }).slice(0,20).forEach (function (i) {
+    }).slice(0, 20).forEach(function (i) {
         images.push({
             uuid: i,
             name: getImageName(i, data),
@@ -967,14 +976,8 @@ function latencyHistogram(name, data)
         var bucket = 0;
         var bucket_value;
 
-/*
-        if (d.code > 299 || d.code < 200) {
-            return;
-        }
-*/
-
         while (d.latency >= Math.pow(2, bucket)) {
-            bucket++
+            bucket++;
         }
         bucket_value = Math.pow(2, bucket);
 
@@ -1049,7 +1052,7 @@ function outputDockerMethods(data)
 // master data processor dispatcher
 
 function processData(files, callback) {
-    data = {};
+    var data = {};
 
     async.series([
         function (cb) {
@@ -1074,10 +1077,10 @@ findFiles(function (err, files) {
         process.exit(1);
     }
 
-    processData(files, function (err, data) {
-        outputServerCapacity(data);
-        outputVmCounts(data);
-        outputDockerMethods(data);
+    processData(files, function (e, _data) {
+        outputServerCapacity(_data);
+        outputVmCounts(_data);
+        outputDockerMethods(_data);
         process.exit(0);
     });
 });
