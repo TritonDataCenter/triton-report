@@ -1,0 +1,19 @@
+{
+    "name": "triton-report",
+    "description": "triton-report",
+    "version": "0.0.1",
+    "author": "Joyent (joyent.com)",
+    "private": true,
+    "dependencies": {
+        "async": "0.9.0",
+        "manta": "1.5.1",
+        "sprintf-js": "1.0.2",
+        "tabula": "1.4.2"
+    },
+    "devDependencies": {
+    },
+    "engines": {
+        "node": ">=0.10"
+    },
+    "license": "MPL-2.0"
+}
