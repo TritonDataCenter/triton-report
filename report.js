@@ -162,8 +162,8 @@ function onEachLogLine(datacenter, service, hours, objcb, callback)
                                 //     "Uncaught TypeError: Cannot call method
                                 //     'substr' of undefined"
                                 // then we should track that separately.
-                                console.error('failed to parse: '
-                                    + JSON.stringify(chunk));
+                                console.error('err: ' + e.message);
+                                console.error('failed to parse: ' + chunk);
                             }
                         }
                     }
@@ -721,9 +721,47 @@ function normalizeDockerEndpoint(endpoint)
     return (candidate);
 }
 
+function normalizeErrorMessage(obj)
+{
+    function anonymizeString(str) {
+        var result;
+
+        // JSSTYLED
+        result = str.replace(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/g, '<UUID>');
+        result = result.replace(/[a-f0-9]{64}/g, '<DockerID>');
+        result = result.replace(/sdc_overlay[0-9]+/g, 'sdc_overlayXXXX');
+        result = result.replace(/sdc_overlay\/[0-9]+/g, 'sdc_overlay/XXXX');
+        // JSSTYLED
+        result = result.replace(/[a-f0-9]{2}\:[a-f0-9]{2}\:[a-f0-9]{2}\:[a-f0-9]{2}\:[a-f0-9]{2}\:[a-f0-9]{2}/g, '<MAC>');
+        result = result.replace(/tmp[0-9]+/g, 'tmpXXXX');
+
+        return (result);
+    }
+
+    if (obj.err && obj.err.stack) {
+        return (anonymizeString(obj.err.stack));
+    } else if (obj.msg) {
+        return (anonymizeString(obj.msg));
+    }
+
+    return ('ERR: ' + anonymizeString(JSON.stringify(obj)));
+}
+
 function addDockerLogData(obj, data)
 {
     var endpoint;
+    var err;
+
+    if (obj.hasOwnProperty('level') && obj.level >= 50) {
+        if (!data.hasOwnProperty('errors')) {
+            data.errors = {};
+        }
+        err = normalizeErrorMessage(obj);
+        if (!data.errors.hasOwnProperty(err)) {
+            data.errors[err] = 0;
+        }
+        data.errors[err]++;
+    }
 
     if (obj.hasOwnProperty('req') && obj.req.hasOwnProperty('method')) {
         if (!data.hasOwnProperty('methods')) {
@@ -1049,6 +1087,19 @@ function outputDockerMethods(data)
     }
 }
 
+function outputErrors(data) {
+    if (!data.errors) {
+        return;
+    }
+
+    Object.keys(data.errors).sort(function (a, b) {
+        return (data.errors[b] - data.errors[a]);
+    }).forEach(function (e) {
+        console.error('\n=== ' + data.errors[e] + ' instances of: ===');
+        console.error(e);
+    });
+}
+
 // master data processor dispatcher
 
 function processData(files, callback) {
@@ -1081,6 +1132,7 @@ findFiles(function (err, files) {
         outputServerCapacity(_data);
         outputVmCounts(_data);
         outputDockerMethods(_data);
+        outputErrors(_data);
         process.exit(0);
     });
 });
