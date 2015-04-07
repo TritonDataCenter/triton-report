@@ -21,8 +21,10 @@ var zlib = require('zlib');
 // GLOBAL
 var ADMIN_UUID = process.env.ADMIN_UUID;
 var DATACENTER = process.env.DATACENTER;
+var EMPLOYEE_FILE = process.env.EMPLOYEES;
 var DOCKER_IMAGES = {};
 var IMGAPI_IMAGES = {};
+var MODE;
 var client = manta.createClient({
     sign: null,
     user: process.env.MANTA_USER,
@@ -282,6 +284,31 @@ function readFile(filename, linecb, callback) {
         stream.on('end', function () {
             callback();
         });
+    });
+}
+
+// Load list of owner_uuids to consider as employees
+
+function processEmployees(data, callback) {
+    if (!EMPLOYEE_FILE) {
+        callback();
+        return;
+    }
+
+    fs.readFile(EMPLOYEE_FILE, 'utf8', function (error, filedata) {
+
+        if (error) {
+            callback(error);
+            return;
+        }
+
+        data.employees = {};
+        filedata.split('\n').forEach(function (l) {
+            if (l.length > 0) {
+                data.employees[l] = true;
+            }
+        });
+        callback();
     });
 }
 
@@ -557,6 +584,11 @@ function processVmapiVM(vmobj, data) {
     var im = {};
     var matches;
     var smartdc_role;
+
+    // if we're filtering out employee containers, do it asap
+    if (data.employees && data.employees[vmobj.owner_uuid]) {
+        return;
+    }
 
     if (vmobj.internal_metadata) {
         im = JSON.parse(vmobj.internal_metadata);
@@ -1095,8 +1127,8 @@ function outputErrors(data) {
     Object.keys(data.errors).sort(function (a, b) {
         return (data.errors[b] - data.errors[a]);
     }).forEach(function (e) {
-        console.error('\n=== ' + data.errors[e] + ' instances of: ===');
-        console.error(e);
+        console.log('\n=== ' + data.errors[e] + ' instances of: ===');
+        console.log(e);
     });
 }
 
@@ -1107,6 +1139,8 @@ function processData(files, callback) {
 
     async.series([
         function (cb) {
+            processEmployees(data, cb);
+        }, function (cb) {
             processCnapiData(files.cnapi, data, cb);
         }, function (cb) {
             processImgapiData(files.imgapi, data, cb);
@@ -1115,6 +1149,11 @@ function processData(files, callback) {
         }, function (cb) {
             processVmapiData(files.vmapi, data, cb);
         }, function (cb) {
+            // this is pretty expensive, skip if we don't need
+            if (MODE !== 'errors' && MODE !== 'endpoints') {
+                cb();
+                return;
+            }
             processDockerLogData(24, data, cb);
         }
     ], function (err) {
@@ -1122,17 +1161,51 @@ function processData(files, callback) {
     });
 }
 
-findFiles(function (err, files) {
-    if (err) {
-        console.error('fail: ' + err.message);
+function usage() {
+    console.error('Usage: report.js <endpoints|errors|vms>');
+}
+
+function main() {
+    if (process.argv[3] || !process.argv[2]) {
+        usage();
         process.exit(1);
     }
+    switch (process.argv[2]) {
+        case 'endpoints':
+            MODE = 'endpoints';
+            break;
+        case 'errors':
+            MODE = 'errors';
+            break;
+        case 'vms':
+            MODE = 'vms';
+            break;
+        default:
+            usage();
+            process.exit(1);
+            break;
+    }
 
-    processData(files, function (e, _data) {
-        outputServerCapacity(_data);
-        outputVmCounts(_data);
-        outputDockerMethods(_data);
-        outputErrors(_data);
-        process.exit(0);
+    findFiles(function (err, files) {
+        if (err) {
+            console.error('fail: ' + err.message);
+            process.exit(1);
+        }
+
+        processData(files, function (e, _data) {
+            if (MODE === 'vms') {
+                outputServerCapacity(_data);
+                outputVmCounts(_data);
+            }
+            if (MODE === 'endpoints') {
+                outputDockerMethods(_data);
+            }
+            if (MODE === 'errors') {
+                outputErrors(_data);
+            }
+            process.exit(0);
+        });
     });
-});
+}
+
+main();
