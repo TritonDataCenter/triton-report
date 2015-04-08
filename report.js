@@ -219,9 +219,19 @@ function findLatestDatafile(datacenter, key, fileprefix, callback) {
             cb();
         });
     }, function (err) {
+        var p;
+
+        if (found_file.parent && found_file.name) {
+            p = path.join(found_file.parent, found_file.name);
+        } else {
+            console.error('invalid found_file: ' + JSON.stringify(found_file));
+            callback(new Error('unable to find file'));
+            return;
+        }
+
         if (!err) {
-            console.error('=> ' + path.join(found_file.parent, found_file.name));
-            callback(null, path.join(found_file.parent, found_file.name));
+            console.error('=> ' + p);
+            callback(null, p);
         } else {
             callback(err);
         }
