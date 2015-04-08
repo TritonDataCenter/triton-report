@@ -25,11 +25,7 @@ var EMPLOYEE_FILE = process.env.EMPLOYEES;
 var DOCKER_IMAGES = {};
 var IMGAPI_IMAGES = {};
 var MODE;
-var client = manta.createClient({
-    sign: null,
-    user: process.env.MANTA_USER,
-    url: process.env.MANTA_URL
-});
+var client;
 
 // general helpers
 
@@ -1179,6 +1175,24 @@ function usage() {
     console.error('Usage: report.js <endpoints|errors|vms>');
 }
 
+function setupMantaClient() {
+    var sign = null;
+
+    if (!process.env.SSH_AUTH_SOCK) {
+        sign = manta.privateKeySigner({
+            key: fs.readFileSync(process.env.HOME + '/.ssh/id_rsa', 'utf8'),
+            keyId: process.env.MANTA_KEY_ID,
+            user: process.env.MANTA_USER
+        });
+    }
+
+    client = manta.createClient({
+        sign: sign,
+        user: process.env.MANTA_USER,
+        url: process.env.MANTA_URL
+    });
+}
+
 function main() {
     if (process.argv[3] || !process.argv[2]) {
         usage();
@@ -1199,6 +1213,8 @@ function main() {
             process.exit(1);
             break;
     }
+
+    setupMantaClient();
 
     findFiles(function (err, files) {
         if (err) {
