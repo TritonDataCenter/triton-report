@@ -219,8 +219,12 @@ function findLatestDatafile(datacenter, key, fileprefix, callback) {
             cb();
         });
     }, function (err) {
-        console.error('=> ' + path.join(found_file.parent, found_file.name));
-        callback(null, path.join(found_file.parent, found_file.name));
+        if (!err) {
+            console.error('=> ' + path.join(found_file.parent, found_file.name));
+            callback(null, path.join(found_file.parent, found_file.name));
+        } else {
+            callback(err);
+        }
     });
 }
 
