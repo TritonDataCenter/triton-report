@@ -54,6 +54,7 @@ function getFirstDatafile(dir, fileprefix, callback) {
             callback(null, result);
             return;
         } else if (err) {
+            console.error('ERROR(' + dir + '): ' + err.body.code);
             callback(err);
             return;
         }
