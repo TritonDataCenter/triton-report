@@ -51,6 +51,7 @@ function getFirstDatafile(dir, fileprefix, callback) {
 
     client.ls(dir, opts, function (err, res) {
         if (err && err.code === 'NotFoundError') {
+            console.error('ERROR(' + dir + '): ' + err.body.code);
             callback(null, result);
             return;
         } else if (err) {
@@ -1179,7 +1180,7 @@ function usage() {
 function setupMantaClient() {
     var sign = null;
 
-    if (!process.env.SSH_AUTH_SOCK) {
+    if (true || !process.env.SSH_AUTH_SOCK) {
         sign = manta.privateKeySigner({
             key: fs.readFileSync(process.env.HOME + '/.ssh/id_rsa', 'utf8'),
             keyId: process.env.MANTA_KEY_ID,
