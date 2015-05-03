@@ -222,8 +222,10 @@ function findLatestDatafile(datacenter, key, fileprefix, callback) {
         if (found_file.parent && found_file.name) {
             p = path.join(found_file.parent, found_file.name);
         } else {
-            console.error('invalid found_file: ' + JSON.stringify(found_file));
-            callback(new Error('unable to find file'));
+            console.error('file "' + fileprefix + '" not found under: '
+                + path_prefix);
+            callback(new Error('unable to find "' + fileprefix + '" in '
+                + path_prefix));
             return;
         }
 
@@ -1180,9 +1182,14 @@ function usage() {
 function setupMantaClient() {
     var sign = null;
 
-    if (true || !process.env.SSH_AUTH_SOCK) {
+    if (!process.env.SSH_AUTH_SOCK) {
         sign = manta.privateKeySigner({
             key: fs.readFileSync(process.env.HOME + '/.ssh/id_rsa', 'utf8'),
+            keyId: process.env.MANTA_KEY_ID,
+            user: process.env.MANTA_USER
+        });
+    } else {
+        sign = manta.sshAgentSigner({
             keyId: process.env.MANTA_KEY_ID,
             user: process.env.MANTA_USER
         });
